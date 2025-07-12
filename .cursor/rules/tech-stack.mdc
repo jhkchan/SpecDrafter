@@ -1,0 +1,33 @@
+---
+alwaysApply: true
+description: "Guidelines for maintaining the existing technology stack and avoiding unwanted version upgrades or downgrades."
+---
+
+# Technology Stack Guide
+
+This project has a specific set of technologies. Adhere to these and avoid introducing new libraries or frameworks without discussion. Do not upgrade or downgrade major versions of the dependencies listed in the package files.
+
+## Frontend
+
+The frontend is a [Next.js](https://nextjs.org/) application. Key technologies are:
+
+- **Framework**: [Next.js](https://nextjs.org/) (v15.3.5) with Turbopack.
+- **Language**: TypeScript.
+- **UI**: [React](https://react.dev/) (v19).
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) (v4).
+- **Component Library**: UI components are built using [shadcn/ui](https://ui.shadcn.com/), which uses Radix UI primitives. See `frontend/src/components/ui`.
+- **Dependencies**: For a full list of dependencies, see [`frontend/package.json`](mdc:frontend/package.json). Please do not perform major version upgrades without consultation.
+
+## Backend
+
+The backend is a Python application using [FastAPI](https://fastapi.tiangolo.com/). Key technologies are:
+
+- **Framework**: [FastAPI](https://fastapi.tiangolo.com/).
+- **Language**: Python.
+- **Database**: MongoDB, accessed asynchronously with [Motor](https://motor.readthedocs.io/).
+- **AI**: The AI assistant capabilities are powered by Google Gemini models (The only permitted model is `gemini-2.5-pro`) through the `google-genai` Python library.
+- **Dependencies**: For a full list of dependencies, see [`backend/requirements.txt`](mdc:backend/requirements.txt). Please do not perform major version upgrades without consultation.
+
+## AI Assistant
+
+The AI assistant for this project is Gemini 2.5 Pro. It is expected to follow these rules and use the specified tech stack. The only permitted model is `gemini-2.5-pro`.
