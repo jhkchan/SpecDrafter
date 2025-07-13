@@ -208,50 +208,59 @@ export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
       messagesToSubmit, // Send the clean history to the backend
       (chunk: StreamChunk) => {
         if (chunk.type === 'thought' && chunk.content) {
-            fullThoughts += chunk.content;
             setMessages(prev => {
-                const updatedMessages = [...prev];
-                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                const lastMessage = prev[prev.length - 1];
                 if (lastMessage && lastMessage.role === 'assistant' && lastMessage.data) {
-                    lastMessage.data.thoughts = fullThoughts;
+                    const newLastMessage = { 
+                        ...lastMessage, 
+                        data: { ...lastMessage.data, thoughts: (lastMessage.data.thoughts || '') + chunk.content } 
+                    };
+                    return [...prev.slice(0, -1), newLastMessage];
                 }
-                return updatedMessages;
+                return prev;
             });
         } else if (chunk.type === 'text' && chunk.content) {
-            fullResponse += chunk.content;
             setMessages(prev => {
-                const updatedMessages = [...prev];
-                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                const lastMessage = prev[prev.length - 1];
                 if (lastMessage && lastMessage.role === 'assistant') {
-                    lastMessage.content = fullResponse;
+                    const newLastMessage = { 
+                        ...lastMessage, 
+                        content: lastMessage.content + chunk.content 
+                    };
+                    return [...prev.slice(0, -1), newLastMessage];
                 }
-                return updatedMessages;
+                return prev;
             });
         }
       },
-      async (finalProject) => {
+      async () => {
         setIsLoading(false); // Set loading to false once streaming is complete
+        
+        // Let the state update fully before proceeding
+        await new Promise(resolve => setTimeout(resolve, 0));
 
-        const renameMatch = fullResponse.match(/\[RENAME_PROJECT: "(.+?)"\]/);
-        if (renameMatch && renameMatch[1] && activeProject) {
-            const newName = renameMatch[1];
-            try {
-                const updated = await updateProject(activeProject._id, { name: newName });
-                onProjectsUpdate(updated._id);
-            } catch (error) {
-                console.error("Failed to rename project from bot command:", error);
+        setMessages(prev => {
+            const lastMessage = prev[prev.length - 1];
+            if (!lastMessage || lastMessage.role !== 'assistant') return prev;
+
+            const fullResponse = lastMessage.content;
+            const renameMatch = fullResponse.match(/\[RENAME_PROJECT: "(.+?)"\]/);
+
+            if (renameMatch && renameMatch[1] && activeProject) {
+                const newName = renameMatch[1];
+                updateProject(activeProject._id, { name: newName })
+                    .then(updated => onProjectsUpdate(updated._id))
+                    .catch(error => console.error("Failed to rename project from bot command:", error));
             }
-        }
-          
-        if (isAudioInput) {
-          try {
-            await handlePlayText({ role: 'assistant', content: fullResponse });
-          } catch(e) {
-            console.error("Playback failed after stream", e)
-          } finally {
-            setLastInputWasAudio(false);
-          }
-        }
+            
+            if (lastInputWasAudio) {
+                handlePlayText({ role: 'assistant', content: fullResponse })
+                    .catch(e => console.error("Playback failed after stream", e))
+                    .finally(() => setLastInputWasAudio(false));
+            }
+
+            return prev; // Return the state, no changes needed here.
+        });
       },
       (error) => {
         setMessages(prev => {

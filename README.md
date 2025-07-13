@@ -92,7 +92,26 @@ cd SpecDrafter
     ```
     The backend API will be running at `http://localhost:8000`.
 
-### 3. Frontend Setup
+### 3. Backend Setup with Docker (Alternative)
+
+As an alternative to running the backend manually, you can use Docker and Docker Compose to set up the backend services.
+
+1.  **Ensure Docker is running.**
+
+2.  **Navigate to the `backend` directory:**
+    ```bash
+    cd backend
+    ```
+
+3.  **Create your `.env` file** as described in the manual setup section above and authenticate with `gcloud auth application-default login`. The Docker container will mount your local gcloud configuration.
+
+4.  **Build and run the containers:**
+    ```bash
+    docker-compose up --build
+    ```
+    This command will build the backend image and start the `backend` and `mongodb` containers. The backend will be available at `http://localhost:8000`.
+
+### 4. Frontend Setup
 
 1.  **Navigate to the frontend directory (from the root):**
     ```bash

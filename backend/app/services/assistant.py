@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from typing import List, Dict, Any, Generator
 from ..models import ConversationEntry, SpecPhase
 from fastapi import HTTPException
@@ -114,7 +115,7 @@ async def stream_chat_response(project_id: str, history: list[dict]):
     full_thoughts = ""
 
     for chunk in response_stream:
-        if not chunk.candidates:
+        if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
             continue
         # According to the doc, iterate through parts and check the `thought` attribute.
         for part in chunk.candidates[0].content.parts:
@@ -140,6 +141,8 @@ async def stream_chat_response(project_id: str, history: list[dict]):
                     full_response_text += text_to_send
                     data = {"type": "text", "content": text_to_send}
                     yield f'data: {json.dumps(data)}\n\n'
+        
+        await asyncio.sleep(0.01)
         
     if full_response_text:
         assistant_entry = ConversationEntry(
