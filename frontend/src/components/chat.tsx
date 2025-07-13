@@ -33,7 +33,6 @@ export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [currentPlayingMessage, setCurrentPlayingMessage] = React.useState<string | null>(null);
-  const [lastInputWasAudio, setLastInputWasAudio] = React.useState(false);
 
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
   const audioChunksRef = React.useRef<Blob[]>([]);
@@ -154,7 +153,6 @@ export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
           const base64data = reader.result as string;
           const audioBase64 = base64data.split(',')[1];
           
-          setLastInputWasAudio(true);
           const tempUserMessage: Message = { role: "user", content: "[Transcribing...]" };
           const messagesWithTemp = [...messages, tempUserMessage];
           setMessages(messagesWithTemp);
@@ -173,7 +171,6 @@ export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
               setMessages(prev => prev.map(msg => 
                   msg.content === "[Transcribing...]" ? { ...msg, content: "[Transcription Failed]" } : msg
               ));
-              setLastInputWasAudio(false);
           }
         };
         mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());
@@ -208,18 +205,20 @@ export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
       messagesToSubmit, // Send the clean history to the backend
       (chunk: StreamChunk) => {
         if (chunk.type === 'thought' && chunk.content) {
+            fullThoughts += chunk.content;
             setMessages(prev => {
                 const lastMessage = prev[prev.length - 1];
                 if (lastMessage && lastMessage.role === 'assistant' && lastMessage.data) {
                     const newLastMessage = { 
                         ...lastMessage, 
-                        data: { ...lastMessage.data, thoughts: (lastMessage.data.thoughts || '') + chunk.content } 
+                        data: { ...lastMessage.data, thoughts: fullThoughts } 
                     };
                     return [...prev.slice(0, -1), newLastMessage];
                 }
                 return prev;
             });
         } else if (chunk.type === 'text' && chunk.content) {
+            fullResponse += chunk.content;
             setMessages(prev => {
                 const lastMessage = prev[prev.length - 1];
                 if (lastMessage && lastMessage.role === 'assistant') {
@@ -235,32 +234,22 @@ export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
       },
       async () => {
         setIsLoading(false); // Set loading to false once streaming is complete
+
+        const renameMatch = fullResponse.match(/\[RENAME_PROJECT: "(.+?)"\]/);
+        if (renameMatch && renameMatch[1] && activeProject) {
+            const newName = renameMatch[1];
+            try {
+                const updated = await updateProject(activeProject._id, { name: newName });
+                onProjectsUpdate(updated._id);
+            } catch (error) {
+                console.error("Failed to rename project from bot command:", error);
+            }
+        }
         
-        // Let the state update fully before proceeding
-        await new Promise(resolve => setTimeout(resolve, 0));
-
-        setMessages(prev => {
-            const lastMessage = prev[prev.length - 1];
-            if (!lastMessage || lastMessage.role !== 'assistant') return prev;
-
-            const fullResponse = lastMessage.content;
-            const renameMatch = fullResponse.match(/\[RENAME_PROJECT: "(.+?)"\]/);
-
-            if (renameMatch && renameMatch[1] && activeProject) {
-                const newName = renameMatch[1];
-                updateProject(activeProject._id, { name: newName })
-                    .then(updated => onProjectsUpdate(updated._id))
-                    .catch(error => console.error("Failed to rename project from bot command:", error));
-            }
-            
-            if (lastInputWasAudio) {
-                handlePlayText({ role: 'assistant', content: fullResponse })
-                    .catch(e => console.error("Playback failed after stream", e))
-                    .finally(() => setLastInputWasAudio(false));
-            }
-
-            return prev; // Return the state, no changes needed here.
-        });
+        if (isAudioInput) {
+            handlePlayText({ role: 'assistant', content: fullResponse })
+                .catch(e => console.error("Playback failed after stream", e));
+        }
       },
       (error) => {
         setMessages(prev => {
@@ -272,7 +261,6 @@ export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
           return updatedMessages;
         });
         setIsLoading(false);
-        setLastInputWasAudio(false);
       }
     );
   };
@@ -281,7 +269,6 @@ export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
     e.preventDefault();
     if (!input.trim() || isLoading || !activeProject) return;
 
-    setLastInputWasAudio(false);
     const newUserMessage: Message = { role: "user", content: input };
     const newMessages = [...messages, newUserMessage];
     setMessages(newMessages);
