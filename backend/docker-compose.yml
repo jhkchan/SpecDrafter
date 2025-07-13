@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - specdrafter-net
+
+  backend:
+    build: .
+    container_name: backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/
+    volumes:
+      # Mounts the gcloud config directory to allow the application to use Application Default Credentials.
+      # Assumes you have already run 'gcloud auth application-default login'.
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+    depends_on:
+      - mongodb
+    networks:
+      - specdrafter-net
+
+networks:
+  specdrafter-net:
+    driver: bridge
+
+volumes:
+  mongo-data:
+    driver: local 
