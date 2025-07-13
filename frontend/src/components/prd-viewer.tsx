@@ -13,12 +13,14 @@ import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Download } from 'lucide-react';
+import { Skeleton } from './ui/skeleton';
 
 interface PrdViewerProps {
   prdContent: string;
   projectName: string;
   isOpen: boolean;
   onClose: () => void;
+  isGenerating: boolean;
 }
 
 const downloadMarkdown = (content: string, filename: string) => {
@@ -35,7 +37,15 @@ const downloadMarkdown = (content: string, filename: string) => {
     document.body.removeChild(link);
 };
 
-export function PrdViewer({ prdContent, projectName, isOpen, onClose }: PrdViewerProps) {
+export function PrdViewer({ prdContent, projectName, isOpen, onClose, isGenerating }: PrdViewerProps) {
+  const scrollViewportRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (scrollViewportRef.current) {
+        scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight;
+    }
+  }, [prdContent]);
+    
   if (!isOpen) {
     return null;
   }
@@ -66,21 +76,33 @@ export function PrdViewer({ prdContent, projectName, isOpen, onClose }: PrdViewe
             This is the generated Product Requirements Document. You can review it here or download it as a Markdown file.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="flex-1 my-4">
+        <ScrollArea className="flex-1 my-4" viewportRef={scrollViewportRef}>
             <div className="p-6">
-                <ReactMarkdown 
-                    remarkPlugins={[remarkGfm]}
-                    components={markdownComponents}
-                >
-                    {prdContent}
-                </ReactMarkdown>
+                {isGenerating && !prdContent ? (
+                    <div className="space-y-4">
+                        <Skeleton className="h-8 w-3/4" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-5/6" />
+                        <br/>
+                        <Skeleton className="h-6 w-1/2" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-full" />
+                    </div>
+                ) : (
+                    <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={markdownComponents}
+                    >
+                        {prdContent}
+                    </ReactMarkdown>
+                )}
             </div>
         </ScrollArea>
         <DialogFooter>
-            <Button variant="ghost" onClick={onClose}>Close</Button>
-            <Button onClick={handleDownload}>
-                <Download className="mr-2 h-4 w-4" />
-                Download .md
+            <Button variant="ghost" onClick={onClose} disabled={isGenerating}>Close</Button>
+            <Button onClick={handleDownload} disabled={isGenerating || !prdContent}>
+                {isGenerating ? 'Generating...' : <><Download className="mr-2 h-4 w-4" /> Download .md</>}
             </Button>
         </DialogFooter>
       </DialogContent>

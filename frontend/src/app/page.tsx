@@ -61,6 +61,7 @@ export default function Home() {
     
     setIsGenerating(true);
     setGeneratedPrdContent(""); // Clear previous content
+    setIsPrdViewerOpen(true); // Open the dialog immediately
     
     await streamPrd(
         activeProject._id,
@@ -69,14 +70,13 @@ export default function Home() {
         },
         () => {
             setIsGenerating(false);
-            setIsPrdViewerOpen(true);
+            // The dialog is already open, so no need to set it here
         },
         (error) => {
             console.error("Failed to generate PRD:", error);
             // You could add a user-facing error message here
             setGeneratedPrdContent("# Generation Error\n\nAn error occurred while generating the document. Please check the console for details.");
             setIsGenerating(false);
-            setIsPrdViewerOpen(true);
         }
     );
   };
@@ -142,6 +142,7 @@ export default function Home() {
         onClose={() => setIsPrdViewerOpen(false)}
         prdContent={generatedPrdContent}
         projectName={activeProject?.name || "Project"}
+        isGenerating={isGenerating}
       />
     </main>
   )

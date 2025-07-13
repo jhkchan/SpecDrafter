@@ -192,11 +192,12 @@ def get_prd_stream(conversation_history: List[ConversationEntry], target: str) -
         "The goal is for this PRD to be used by that AI to code the entire system. "
         "The document should be well-structured, using Markdown for formatting (headings, lists, bold text, etc.). "
         "Structure the PRD with the following sections: Introduction, User Personas, User Stories, Functional Requirements, Non-Functional Requirements, and Out of Scope. "
-        "Ensure all requirements discussed in the conversation are captured accurately and in detail."
+        "Ensure all requirements discussed in the conversation are captured accurately and in detail. "
+        "It is critical that you only output the Markdown for the PRD, without any additional conversational text, introductions, or explanations. The response should start directly with the first line of the Markdown document (e.g., '# Product Requirements Document: ...')."
     )
     system_message = [
         Content(role="user", parts=[Part(text=system_instruction)]),
-        Content(role="model", parts=[Part(text="Understood. I will analyze the conversation and generate a complete, developer-ready PRD in Markdown with the specified sections.")])
+        Content(role="model", parts=[Part(text="Understood. I will analyze the conversation and generate a complete, developer-ready PRD in Markdown with the specified sections, starting directly with the document's content.")])
     ]
 
     history_text = "\n\n".join([f"{entry.role}: {entry.content}" for entry in conversation_history])
