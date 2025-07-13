@@ -152,6 +152,13 @@ async def stream_chat_response(project_id: str, history: list[dict]):
         )
         await project_service.update_project_conversation(project_id, assistant_entry)
 
+    # After saving, get the latest project state and send it to the client
+    # as the final event in the stream.
+    updated_project = await project_service.get_project(project_id)
+    if updated_project:
+        project_dict = updated_project.model_dump(by_alias=True)
+        yield f'data: {json.dumps({"type": "project_update", "project": project_dict}, default=str)}\n\n'
+
 
 def get_edit_stream(current_requirements: str, edit_instruction: str) -> Generator[str, None, None]:
     """

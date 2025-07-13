@@ -204,6 +204,20 @@ export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
       activeProject._id,
       messagesToSubmit, // Send the clean history to the backend
       (chunk: StreamChunk) => {
+        const event = chunk as any; // Bypass type-checking for the new event
+        if (event.type === 'project_update' && event.project) {
+            // The stream is complete, and we have the final, persisted project state.
+            // Update the messages with the definitive conversation history from the server.
+            setMessages(event.project.conversation_history.map((entry: any) => ({
+                role: entry.role === 'assistant' ? 'assistant' : 'user',
+                content: entry.content,
+                data: entry.data
+            })));
+            // Also trigger a refresh for other components that depend on project data.
+            onProjectsUpdate(event.project._id);
+            return; // End of this response stream
+        }
+
         if (chunk.type === 'thought' && chunk.content) {
             fullThoughts += chunk.content;
             setMessages(prev => {
