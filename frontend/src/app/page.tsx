@@ -102,7 +102,7 @@ export default function Home() {
               </div>
             </header>
             <div className="flex-1 overflow-hidden">
-              <Chat activeProject={activeProject} />
+              <Chat activeProject={activeProject} onProjectsUpdate={fetchProjects} />
             </div>
         </SidebarInset>
       </SidebarProvider>

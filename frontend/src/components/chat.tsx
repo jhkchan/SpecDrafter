@@ -12,6 +12,7 @@ import {
   transcribeAudio,
   Message as ApiMessage,
   StreamChunk,
+  updateProject,
 } from "@/lib/api";
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -22,9 +23,10 @@ type Message = ApiMessage;
 
 interface ChatProps {
     activeProject: Project | null;
+    onProjectsUpdate: (newProjectId?: string) => void;
 }
 
-export function Chat({ activeProject }: ChatProps) {
+export function Chat({ activeProject, onProjectsUpdate }: ChatProps) {
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [input, setInput] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
@@ -229,6 +231,18 @@ export function Chat({ activeProject }: ChatProps) {
       },
       async (finalProject) => {
         setIsLoading(false); // Set loading to false once streaming is complete
+
+        const renameMatch = fullResponse.match(/\[RENAME_PROJECT: "(.+?)"\]/);
+        if (renameMatch && renameMatch[1] && activeProject) {
+            const newName = renameMatch[1];
+            try {
+                const updated = await updateProject(activeProject._id, { name: newName });
+                onProjectsUpdate(updated._id);
+            } catch (error) {
+                console.error("Failed to rename project from bot command:", error);
+            }
+        }
+          
         if (isAudioInput) {
           try {
             await handlePlayText({ role: 'assistant', content: fullResponse });
