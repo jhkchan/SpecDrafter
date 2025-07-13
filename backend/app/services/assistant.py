@@ -1,8 +1,9 @@
 import os
+import json
 from typing import List, Dict, Any, Generator
 from ..models import ConversationEntry, SpecPhase
 from fastapi import HTTPException
-from google.genai.types import Content, Part, Blob, GenerationConfig
+from google.genai.types import Content, Part, Blob, GenerationConfig, GenerateContentConfig, ThinkingConfig
 from datetime import datetime
 import base64
 from .audio import process_audio_input
@@ -96,30 +97,55 @@ async def stream_chat_response(project_id: str, history: list[dict]):
     # Create the full prompt with history
     contents = system_message + history_for_model + [Content(role="user", parts=prompt_parts)]
 
+    # Enable the "thinking" feature as per the latest Gemini API docs
+    config = GenerateContentConfig(
+        thinking_config=ThinkingConfig(
+            include_thoughts=True
+        )
+    )
+
     response_stream = client.models.generate_content_stream(
         model=MODEL_NAME,
         contents=contents,
+        config=config
     )
-    full_response = ""
-    for response in response_stream:
-        if not response.text:
+
+    full_response_text = ""
+    full_thoughts = ""
+
+    for chunk in response_stream:
+        if not chunk.candidates:
             continue
+        # According to the doc, iterate through parts and check the `thought` attribute.
+        for part in chunk.candidates[0].content.parts:
+            if not part.text:
+                continue
+            
+            if hasattr(part, 'thought') and part.thought:
+                thought_text = part.text
+                if thought_text:
+                    full_thoughts += thought_text
+                    data = {"type": "thought", "content": thought_text}
+                    yield f'data: {json.dumps(data)}\n\n'
+            else: # This is a regular text part
+                text_to_send = part.text
+                if "[PHASE_COMPLETE]" in text_to_send:
+                    print(f"Phase complete signal received for project {project_id}")
+                    text_to_send = text_to_send.replace("[PHASE_COMPLETE]", "")
+                    await advance_project_phase(project_id)
+                    # Also yield the phase complete signal to the client
+                    yield f'data: {json.dumps({"type": "phase_complete"})}\n\n'
 
-        text_to_send = response.text
+                if text_to_send:
+                    full_response_text += text_to_send
+                    data = {"type": "text", "content": text_to_send}
+                    yield f'data: {json.dumps(data)}\n\n'
         
-        if "[PHASE_COMPLETE]" in text_to_send:
-            print(f"Phase complete signal received for project {project_id}")
-            text_to_send = text_to_send.replace("[PHASE_COMPLETE]", "")
-            await advance_project_phase(project_id)
-
-        if text_to_send:
-            yield text_to_send
-            full_response += text_to_send
-        
-    if full_response:
+    if full_response_text:
         assistant_entry = ConversationEntry(
             role="assistant", 
-            content=full_response.strip()
+            content=full_response_text.strip(),
+            data={"thoughts": full_thoughts.strip()} if full_thoughts else {}
         )
         await project_service.update_project_conversation(project_id, assistant_entry)
 

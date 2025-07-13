@@ -6,9 +6,17 @@ import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Bot, Mic, Send, User, Volume2, Square } from "lucide-react"
 import { Project } from "@/lib/types"
-import { streamChat, textToSpeech, transcribeAudio, Message as ApiMessage } from "@/lib/api"
+import {
+  streamChat,
+  textToSpeech,
+  transcribeAudio,
+  Message as ApiMessage,
+  StreamChunk,
+} from "@/lib/api";
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
+import { ChevronsUpDown } from "lucide-react";
 
 type Message = ApiMessage;
 
@@ -60,30 +68,62 @@ export function Chat({ activeProject }: ChatProps) {
     }
   };
   
-  const handlePlayText = async (message: Message) => {
-    if (currentPlayingMessage === message.content) {
-      if (audioPlayerRef.current) {
-        audioPlayerRef.current.pause();
-        audioPlayerRef.current.currentTime = 0;
+  const handlePlayText = (message: Message): Promise<void> => {
+    return new Promise(async (resolve, reject) => {
+      if (currentPlayingMessage === message.content) {
+        if (audioPlayerRef.current) {
+          audioPlayerRef.current.pause();
+          audioPlayerRef.current.currentTime = 0;
+        }
+        setIsPlaying(false);
+        setCurrentPlayingMessage(null);
+        setIsLoading(false);
+        resolve();
+        return;
       }
-      setIsPlaying(false);
-      setCurrentPlayingMessage(null);
-      return;
-    }
-  
-    setCurrentPlayingMessage(message.content);
-    setIsLoading(true);
-    try {
-      const audioBase64 = await textToSpeech(message.content);
-      const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
-      const audioBlob = new Blob([audioBytes], { type: 'audio/wav' });
-      handleAudioPlay(audioBlob);
-    } catch (error) {
-      console.error("Failed to play audio:", error);
-      setCurrentPlayingMessage(null);
-    } finally {
-      setIsLoading(false);
-    }
+
+      setCurrentPlayingMessage(message.content);
+      setIsLoading(true);
+
+      try {
+        const audioBase64 = await textToSpeech(message.content);
+        const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+        const audioBlob = new Blob([audioBytes], { type: 'audio/wav' });
+
+        if (audioPlayerRef.current) {
+          const url = URL.createObjectURL(audioBlob);
+          audioPlayerRef.current.src = url;
+          audioPlayerRef.current.play();
+          setIsPlaying(true);
+          
+          audioPlayerRef.current.onended = () => {
+            setIsPlaying(false);
+            setCurrentPlayingMessage(null);
+            URL.revokeObjectURL(url);
+            setIsLoading(false);
+            resolve();
+          };
+
+          audioPlayerRef.current.onerror = (e) => {
+            setIsPlaying(false);
+            setCurrentPlayingMessage(null);
+            URL.revokeObjectURL(url);
+            setIsLoading(false);
+            console.error("Audio playback error:", e);
+            reject(e);
+          };
+
+        } else {
+          setIsLoading(false);
+          reject(new Error("Audio player is not available."));
+        }
+      } catch (error) {
+        console.error("Failed to play audio:", error);
+        setCurrentPlayingMessage(null);
+        setIsLoading(false);
+        reject(error);
+      }
+    });
   };
 
   const startRecording = async () => {
@@ -124,7 +164,7 @@ export function Chat({ activeProject }: ChatProps) {
                 msg.content === "[Transcribing...]" ? { ...msg, content: transcript } : msg
             );
             setMessages(finalMessages);
-            handleSendMessage(finalMessages);
+            handleSendMessage(finalMessages, true);
 
           } catch (error) {
               console.error("Transcription failed:", error);
@@ -149,35 +189,54 @@ export function Chat({ activeProject }: ChatProps) {
     }
   };
 
-  const handleSendMessage = async (messagesToSubmit: Message[]) => {
+  const handleSendMessage = async (messagesToSubmit: Message[], isAudioInput: boolean) => {
     if (isLoading || !activeProject) return;
 
     setIsLoading(true);
 
     // Add a placeholder for the assistant's response.
-    const messagesWithAIPending = [...messagesToSubmit, { role: 'assistant', content: '' } as Message];
+    const messagesWithAIPending = [...messagesToSubmit, { role: 'assistant', content: '', data: { thoughts: ''} } as Message];
     setMessages(messagesWithAIPending);
 
     let fullResponse = "";
+    let fullThoughts = "";
+
     await streamChat(
       activeProject._id,
       messagesToSubmit, // Send the clean history to the backend
-      (chunk) => {
-        fullResponse += chunk;
-        setMessages(prev => {
-          const updatedMessages = [...prev];
-          const lastMessage = updatedMessages[updatedMessages.length - 1];
-          if (lastMessage && lastMessage.role === 'assistant') {
-            lastMessage.content += chunk;
-          }
-          return updatedMessages;
-        });
+      (chunk: StreamChunk) => {
+        if (chunk.type === 'thought' && chunk.content) {
+            fullThoughts += chunk.content;
+            setMessages(prev => {
+                const updatedMessages = [...prev];
+                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                if (lastMessage && lastMessage.role === 'assistant' && lastMessage.data) {
+                    lastMessage.data.thoughts = fullThoughts;
+                }
+                return updatedMessages;
+            });
+        } else if (chunk.type === 'text' && chunk.content) {
+            fullResponse += chunk.content;
+            setMessages(prev => {
+                const updatedMessages = [...prev];
+                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                if (lastMessage && lastMessage.role === 'assistant') {
+                    lastMessage.content = fullResponse;
+                }
+                return updatedMessages;
+            });
+        }
       },
-      (finalProject) => {
-        setIsLoading(false);
-        if (lastInputWasAudio) {
-          handlePlayText({ role: 'assistant', content: fullResponse });
-          setLastInputWasAudio(false);
+      async (finalProject) => {
+        setIsLoading(false); // Set loading to false once streaming is complete
+        if (isAudioInput) {
+          try {
+            await handlePlayText({ role: 'assistant', content: fullResponse });
+          } catch(e) {
+            console.error("Playback failed after stream", e)
+          } finally {
+            setLastInputWasAudio(false);
+          }
         }
       },
       (error) => {
@@ -204,7 +263,7 @@ export function Chat({ activeProject }: ChatProps) {
     const newMessages = [...messages, newUserMessage];
     setMessages(newMessages);
     setInput("");
-    handleSendMessage(newMessages);
+    handleSendMessage(newMessages, false);
   };
 
   return (
@@ -235,6 +294,36 @@ export function Chat({ activeProject }: ChatProps) {
                             : "bg-muted"
                         }`}
                     >
+                        {message.data?.thoughts && (
+                            <div className="mt-2">
+                                <Collapsible defaultOpen>
+                                    <CollapsibleTrigger asChild>
+                                        <button className="flex items-center text-xs text-muted-foreground">
+                                            <ChevronsUpDown className="h-4 w-4 mr-1" />
+                                            Assistant's Thoughts
+                                        </button>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent>
+                                        <div className="prose prose-sm dark:prose-invert bg-background/50 rounded-md p-2 mt-1 border">
+                                            <ReactMarkdown 
+                                                remarkPlugins={[remarkGfm]}
+                                                components={{
+                                                    h1: ({node, ...props}) => <h1 className="text-2xl font-bold my-4" {...props} />,
+                                                    h2: ({node, ...props}) => <h2 className="text-xl font-bold my-3" {...props} />,
+                                                    h3: ({node, ...props}) => <h3 className="text-lg font-bold my-2" {...props} />,
+                                                    p: ({node, ...props}) => <p className="mb-4" {...props} />,
+                                                    ul: ({node, ...props}) => <ul className="list-disc pl-5 my-4" {...props} />,
+                                                    ol: ({node, ...props}) => <ol className="list-decimal pl-5 my-4" {...props} />,
+                                                    li: ({node, ...props}) => <li className="mb-2" {...props} />,
+                                                }}
+                                            >
+                                                {message.data.thoughts}
+                                            </ReactMarkdown>
+                                        </div>
+                                    </CollapsibleContent>
+                                </Collapsible>
+                            </div>
+                        )}
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{

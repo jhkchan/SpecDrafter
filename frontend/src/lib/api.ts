@@ -70,15 +70,21 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   data?: {
+    thoughts?: string;
     audio?: string;
     mimeType?: string;
   }
 }
 
+export type StreamChunk = {
+    type: 'thought' | 'text' | 'phase_complete';
+    content?: string;
+}
+
 export async function streamChat(
   projectId: string,
   messages: { role: "user" | "assistant"; content: string; data?: any }[],
-  onChunk: (chunk: string) => void,
+  onChunk: (chunk: StreamChunk) => void,
   onDone?: (project: Project) => void,
   onError?: (error: string) => void
 ) {
@@ -100,42 +106,36 @@ export async function streamChat(
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || ""; // Keep the last, potentially incomplete line
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || ''; // Keep the last partial line
 
       for (const line of lines) {
-        if (line.trim() === "") continue;
-        
-        let chunk = line;
-        if (chunk.includes("[PHASE_COMPLETE]")) {
-          chunk = chunk.replace("[PHASE_COMPLETE]", "");
-          dispatchPhaseUpdate();
-        }
-        
-        if (chunk) {
-          onChunk(chunk);
+        if (line.startsWith('data: ')) {
+          try {
+            const json = JSON.parse(line.substring(6));
+            onChunk(json as StreamChunk);
+            if (json.type === 'phase_complete') {
+                dispatchPhaseUpdate();
+            }
+          } catch (e) {
+            console.error("Failed to parse stream chunk:", line);
+          }
         }
       }
     }
-    
-    // Process any remaining data in the buffer
-    if (buffer.trim()) {
-        let chunk = buffer;
-        if (chunk.includes("[PHASE_COMPLETE]")) {
-          chunk = chunk.replace("[PHASE_COMPLETE]", "");
-          dispatchPhaseUpdate();
-        }
-        if (chunk) {
-            onChunk(chunk);
-        }
-    }
 
     if (onDone) {
-      const finalProject = await getProject(projectId);
-      onDone(finalProject);
+      try {
+        const finalProject = await getProject(projectId);
+        onDone(finalProject);
+      } catch (e) {
+        if (onError) onError("Failed to get final project state.");
+      }
     }
   } catch (error: any) {
     if (onError) {

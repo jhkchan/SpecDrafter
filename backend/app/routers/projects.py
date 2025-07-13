@@ -94,7 +94,7 @@ async def stream_chat(project_id: str, request: Request):
         # needed for the assistant, which expects a list of dictionaries.
         return StreamingResponse(
             assistant.stream_chat_response(project_id, messages),
-            media_type="text/plain"
+            media_type="text/event-stream"
         )
 
     except json.JSONDecodeError:

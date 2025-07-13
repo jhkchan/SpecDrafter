@@ -83,10 +83,10 @@ export function AppSidebar({ projects, activeProject, setActiveProject, onCreate
                         <div key={project._id} className="group flex items-center">
                             <Button
                                 variant={activeProject?._id === project._id ? "secondary" : "ghost"}
-                                className="w-full justify-start"
+                                className="flex-1 justify-start overflow-hidden"
                                 onClick={() => setActiveProject(project)}
                             >
-                                {project.name}
+                                <span className="truncate">{project.name}</span>
                             </Button>
                             <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setProjectToEdit(project); setIsRenameDialogOpen(true); setNewProjectName(project.name); }}>

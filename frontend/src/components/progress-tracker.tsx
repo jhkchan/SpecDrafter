@@ -21,7 +21,7 @@ export function ProgressTracker({ activeProject }: ProgressTrackerProps) {
   const currentIndex = activeProject ? phases.indexOf(activeProject.current_phase) : -1;
 
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
       {phases.map((phase, index) => {
         const isDone = currentIndex > index;
         const isDoing = currentIndex === index;
@@ -32,9 +32,9 @@ export function ProgressTracker({ activeProject }: ProgressTrackerProps) {
 
         return (
           <React.Fragment key={phase}>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <Icon
-                className={`h-4 w-4 ${
+                className={`h-4 w-4 shrink-0 ${
                   isDoing
                     ? "text-primary"
                     : isDone

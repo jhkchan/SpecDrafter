@@ -28,4 +28,4 @@ client = genai.Client(project=project_id, location=GCLOUD_LOCATION)
 MODEL_NAME = "gemini-2.5-pro"
 
 # Model for text-to-speech. Using a preview model as per documentation.
-TTS_MODEL_NAME = "gemini-2.5-pro-preview-tts" 
+TTS_MODEL_NAME = "gemini-2.5-flash-preview-tts" 
