@@ -4,18 +4,22 @@ import * as React from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Chat } from "@/components/chat"
 import { ProgressTracker } from "@/components/progress-tracker"
-import { getProjects, createProject, getProject } from "@/lib/api"
+import { getProjects, createProject, getProject, streamPrd } from "@/lib/api"
 import { Project } from "@/lib/types"
 import { PHASE_UPDATE_EVENT } from "@/lib/events"
 import { ModeToggle } from "@/components/mode-toggle"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
+import { PrdViewer } from "@/components/prd-viewer"
 
 export default function Home() {
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [activeProject, setActiveProject] = React.useState<Project | null>(null);
   const [isCreatingProject, setIsCreatingProject] = React.useState(false);
+  const [isPrdViewerOpen, setIsPrdViewerOpen] = React.useState(false);
+  const [generatedPrdContent, setGeneratedPrdContent] = React.useState("");
+  const [isGenerating, setIsGenerating] = React.useState(false);
 
   const fetchProjects = React.useCallback(async (newProjectIdToSelect?: string) => {
     try {
@@ -50,6 +54,31 @@ export default function Home() {
     } finally {
         setIsCreatingProject(false);
     }
+  };
+
+  const handleGeneratePrd = async () => {
+    if (!activeProject) return;
+    
+    setIsGenerating(true);
+    setGeneratedPrdContent(""); // Clear previous content
+    
+    await streamPrd(
+        activeProject._id,
+        (chunk) => {
+            setGeneratedPrdContent(prev => prev + chunk);
+        },
+        () => {
+            setIsGenerating(false);
+            setIsPrdViewerOpen(true);
+        },
+        (error) => {
+            console.error("Failed to generate PRD:", error);
+            // You could add a user-facing error message here
+            setGeneratedPrdContent("# Generation Error\n\nAn error occurred while generating the document. Please check the console for details.");
+            setIsGenerating(false);
+            setIsPrdViewerOpen(true);
+        }
+    );
   };
 
   const fetchActiveProject = React.useCallback(async () => {
@@ -97,7 +126,9 @@ export default function Home() {
                 <ProgressTracker activeProject={activeProject} />
               </div>
               <div className="flex items-center gap-2">
-                <Button>Generate</Button>
+                <Button onClick={handleGeneratePrd} disabled={!activeProject || isGenerating}>
+                    {isGenerating ? "Generating..." : "Generate"}
+                </Button>
                 <ModeToggle />
               </div>
             </header>
@@ -106,6 +137,12 @@ export default function Home() {
             </div>
         </SidebarInset>
       </SidebarProvider>
+      <PrdViewer
+        isOpen={isPrdViewerOpen}
+        onClose={() => setIsPrdViewerOpen(false)}
+        prdContent={generatedPrdContent}
+        projectName={activeProject?.name || "Project"}
+      />
     </main>
   )
 }

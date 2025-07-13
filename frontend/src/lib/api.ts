@@ -52,6 +52,52 @@ export async function deleteProject(projectId: string): Promise<void> {
     }
 }
 
+export async function streamPrd(
+    projectId: string,
+    onChunk: (chunk: string) => void,
+    onDone?: () => void,
+    onError?: (error: string) => void,
+    target: string = "Cursor"
+) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/projects/${projectId}/generate-prd`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ target }),
+        });
+
+        if (!response.ok || !response.body) {
+            const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(errorData.detail || "Failed to start PRD stream.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                break;
+            }
+            onChunk(decoder.decode(value, { stream: true }));
+        }
+
+        if (onDone) {
+            onDone();
+        }
+
+    } catch (error: any) {
+        if (onError) {
+            onError(error.message || "An unknown error occurred.");
+        } else {
+            console.error("PRD stream error:", error);
+        }
+    }
+}
+
+
 export async function renameProject(projectId: string, newName: string): Promise<Project> {
     const response = await fetch(`${API_BASE_URL}/projects/${projectId}/rename`, {
         method: "PATCH",
