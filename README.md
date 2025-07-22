@@ -16,10 +16,10 @@ SpecDrafter is a web-based tool that uses a conversational AI to help users draf
 
 ### Frontend
 
-- **Framework**: Next.js (v14) with Turbopack
+- **Framework**: Next.js (v15.3.5) with Turbopack
 - **Language**: TypeScript
-- **UI**: React (v18)
-- **Styling**: Tailwind CSS (v3)
+- **UI**: React (v19)
+- **Styling**: Tailwind CSS (v4)
 - **Component Library**: shadcn/ui
 
 ### Backend
@@ -28,6 +28,7 @@ SpecDrafter is a web-based tool that uses a conversational AI to help users draf
 - **Language**: Python
 - **Database**: MongoDB (accessed with Motor)
 - **AI**: Google Gemini Pro via the `google-genai` library
+- **Audio**: PyDub for audio manipulation
 
 ## Getting Started
 
